@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 )
 
@@ -34,6 +35,7 @@ type Content struct {
 	Address string
 	Payload string
 	Value   string
+	Coin    string
 }
 
 // Parses the HTML content and extracts specific elements
@@ -62,15 +64,30 @@ func parseHTML(htmlContent string) *Content {
 			}
 			if n.FirstChild != nil && strings.Contains(n.FirstChild.Data, "NOT") {
 				content.Value = n.FirstChild.Data
+				content.Coin = "NOT"
 			}
 			if n.FirstChild != nil && strings.Contains(n.FirstChild.Data, "TON") {
 				content.Value = n.FirstChild.Data
+				content.Coin = "TON"
+			}
+			if n.FirstChild != nil && strings.Contains(n.FirstChild.Data, "USD₮") {
+				content.Value = n.FirstChild.Data
+				content.Coin = "USDT"
 			}
 		}
 
 		if n.Type == html.ElementNode && n.Data == "a" {
 			if strings.Contains(n.FirstChild.Data, "NOT") {
 				content.Value = n.FirstChild.Data
+				content.Coin = "NOT"
+			}
+			if strings.Contains(n.FirstChild.Data, "TON") {
+				content.Value = n.FirstChild.Data
+				content.Coin = "TON"
+			}
+			if strings.Contains(n.FirstChild.Data, "USD₮") {
+				content.Value = n.FirstChild.Data
+				content.Coin = "USDT"
 			}
 			for _, attribute := range n.Attr {
 				if attribute.Key == "href" && attribute.Val == "/EQD5X3jciHiG4dA8fI3Y6oiXMkibk3RCJ0U2gFmeTsee2sgC" {
@@ -87,18 +104,34 @@ func parseHTML(htmlContent string) *Content {
 	return content
 }
 
+func extractNumbers(input string) string {
+	// Define the regular expression to match numbers
+	re := regexp.MustCompile(`[0-9]+`)
+	// Find all occurrences of numbers in the string
+	numbers := re.FindAllString(input, -1)
+
+	// Join all the numbers to form a single string
+	result := ""
+	for _, num := range numbers {
+		result += num
+	}
+
+	return result
+}
+
 func main() {
 	// Open the Excel file
 	f, err := excelize.OpenFile("NOT_TON.xlsx")
 	if err != nil {
 		log.Fatal(err)
 	}
+	ownWallet := "UQD5X3jciHiG4dA8fI3Y6oiXMkibk3RCJ0U2gFmeTsee2pXH"
 
 	finishd := false
-	sellCont := 1
+	sellCont := 2
 	for !finishd {
 		fmt.Println("get count :", sellCont)
-		cellValue, err := f.GetCellValue("بررسی فوری", fmt.Sprintf("D%d", sellCont))
+		cellValue, err := f.GetCellValue("GENERAL", fmt.Sprintf("E%d", sellCont))
 		if err != nil {
 			sellCont = sellCont + 1
 			continue
@@ -116,20 +149,38 @@ func main() {
 		}
 
 		content := parseHTML(htmlContent)
-		err = f.SetCellValue("بررسی فوری", fmt.Sprintf("G%d", sellCont), content.Address)
+		err = f.SetCellValue("GENERAL", fmt.Sprintf("I%d", sellCont), content.Address)
 		if err != nil {
 			sellCont = sellCont + 1
 			continue
 		}
-		err = f.SetCellValue("بررسی فوری", fmt.Sprintf("H%d", sellCont), content.Payload)
+		err = f.SetCellValue("GENERAL", fmt.Sprintf("H%d", sellCont), content.Payload)
 		if err != nil {
 			sellCont = sellCont + 1
 			continue
 		}
-		err = f.SetCellValue("بررسی فوری", fmt.Sprintf("I%d", sellCont), content.Value)
+		err = f.SetCellValue("GENERAL", fmt.Sprintf("J%d", sellCont), content.Value)
 		if err != nil {
 			sellCont = sellCont + 1
 			continue
+		}
+
+		checkCount := content.Address == ownWallet
+
+		err = f.SetCellValue("GENERAL", fmt.Sprintf("K%d", sellCont), checkCount)
+		if err != nil {
+			sellCont = sellCont + 1
+			continue
+		}
+
+		if !checkCount {
+			if content.Address != ownWallet {
+				err = f.SetCellValue("GENERAL", fmt.Sprintf("L%d", sellCont), "address not match")
+				if err != nil {
+					sellCont = sellCont + 1
+					continue
+				}
+			}
 		}
 
 		sellCont = sellCont + 1
