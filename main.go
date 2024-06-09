@@ -128,10 +128,10 @@ func main() {
 	ownWallet := "UQD5X3jciHiG4dA8fI3Y6oiXMkibk3RCJ0U2gFmeTsee2pXH"
 
 	finishd := false
-	sellCont := 2
+	sellCont := 1
 	for !finishd {
 		fmt.Println("get count :", sellCont)
-		cellValue, err := f.GetCellValue("GENERAL", fmt.Sprintf("E%d", sellCont))
+		cellValue, err := f.GetCellValue("Sheet1", fmt.Sprintf("E%d", sellCont))
 		if err != nil {
 			sellCont = sellCont + 1
 			continue
@@ -142,24 +142,26 @@ func main() {
 			continue
 		}
 
-		htmlContent, err := fetchHTML(cellValue)
+		url := fmt.Sprintf("https://tonviewer.com/transaction/%s", cellValue)
+
+		htmlContent, err := fetchHTML(url)
 		if err != nil {
 			sellCont = sellCont + 1
 			continue
 		}
 
 		content := parseHTML(htmlContent)
-		err = f.SetCellValue("GENERAL", fmt.Sprintf("I%d", sellCont), content.Address)
+		err = f.SetCellValue("Sheet1", fmt.Sprintf("I%d", sellCont), content.Address)
 		if err != nil {
 			sellCont = sellCont + 1
 			continue
 		}
-		err = f.SetCellValue("GENERAL", fmt.Sprintf("H%d", sellCont), content.Payload)
+		err = f.SetCellValue("Sheet1", fmt.Sprintf("H%d", sellCont), content.Payload)
 		if err != nil {
 			sellCont = sellCont + 1
 			continue
 		}
-		err = f.SetCellValue("GENERAL", fmt.Sprintf("J%d", sellCont), content.Value)
+		err = f.SetCellValue("Sheet1", fmt.Sprintf("J%d", sellCont), content.Value)
 		if err != nil {
 			sellCont = sellCont + 1
 			continue
@@ -167,7 +169,7 @@ func main() {
 
 		checkCount := content.Address == ownWallet
 
-		err = f.SetCellValue("GENERAL", fmt.Sprintf("K%d", sellCont), checkCount)
+		err = f.SetCellValue("Sheet1", fmt.Sprintf("K%d", sellCont), checkCount)
 		if err != nil {
 			sellCont = sellCont + 1
 			continue
@@ -175,7 +177,7 @@ func main() {
 
 		if !checkCount {
 			if content.Address != ownWallet {
-				err = f.SetCellValue("GENERAL", fmt.Sprintf("L%d", sellCont), "address not match")
+				err = f.SetCellValue("Sheet1", fmt.Sprintf("L%d", sellCont), "address not match")
 				if err != nil {
 					sellCont = sellCont + 1
 					continue
