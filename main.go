@@ -11,6 +11,8 @@ import (
 	"strings"
 )
 
+var Contract = "EQCvxJy4eG8hyHBFsZ7eePxrRsUQSFE_jpptRAYBmcG_DOGS"
+
 // Fetches the HTML content from a URL and returns it as a string
 func fetchHTML(url string) (string, error) {
 	resp, err := http.Get(url)
@@ -32,10 +34,11 @@ func fetchHTML(url string) (string, error) {
 }
 
 type Content struct {
-	Address string
-	Payload string
-	Value   string
-	Coin    string
+	Address         string
+	Payload         string
+	Value           string
+	Coin            string
+	ContractAddress bool
 }
 
 // Parses the HTML content and extracts specific elements
@@ -62,7 +65,7 @@ func parseHTML(htmlContent string) *Content {
 					}
 				}
 			}
-			if n.FirstChild != nil && strings.Contains(n.FirstChild.Data, "NOT") {
+			if n.FirstChild != nil && strings.Contains(n.FirstChild.Data, "DOGS") {
 				content.Value = n.FirstChild.Data
 				content.Coin = "NOT"
 			}
@@ -77,6 +80,13 @@ func parseHTML(htmlContent string) *Content {
 		}
 
 		if n.Type == html.ElementNode && n.Data == "a" {
+			for _, i := range n.Attr {
+				if i.Key == "href" && strings.Contains(i.Val, Contract) {
+					content.Value = n.FirstChild.Data
+					content.ContractAddress = true
+					content.Coin = "DOGS"
+				}
+			}
 			if strings.Contains(n.FirstChild.Data, "NOT") {
 				content.Value = n.FirstChild.Data
 				content.Coin = "NOT"
@@ -91,6 +101,9 @@ func parseHTML(htmlContent string) *Content {
 			}
 			for _, attribute := range n.Attr {
 				if attribute.Key == "href" && attribute.Val == "/EQD5X3jciHiG4dA8fI3Y6oiXMkibk3RCJ0U2gFmeTsee2sgC" {
+					content.Address = "UQD5X3jciHiG4dA8fI3Y6oiXMkibk3RCJ0U2gFmeTsee2pXH"
+				}
+				if attribute.Key == "href" && attribute.Val == "/UQD5X3jciHiG4dA8fI3Y6oiXMkibk3RCJ0U2gFmeTsee2pXH" {
 					content.Address = "UQD5X3jciHiG4dA8fI3Y6oiXMkibk3RCJ0U2gFmeTsee2pXH"
 				}
 			}
@@ -131,7 +144,7 @@ func main() {
 	sellCont := 1
 	for !finishd {
 		fmt.Println("get count :", sellCont)
-		cellValue, err := f.GetCellValue("Sheet1", fmt.Sprintf("E%d", sellCont))
+		cellValue, err := f.GetCellValue("Sheet1", fmt.Sprintf("D%d", sellCont))
 		if err != nil {
 			sellCont = sellCont + 1
 			continue
@@ -169,7 +182,7 @@ func main() {
 
 		checkCount := content.Address == ownWallet
 
-		err = f.SetCellValue("Sheet1", fmt.Sprintf("K%d", sellCont), checkCount)
+		err = f.SetCellValue("Sheet1", fmt.Sprintf("L%d", sellCont), checkCount)
 		if err != nil {
 			sellCont = sellCont + 1
 			continue
@@ -177,11 +190,19 @@ func main() {
 
 		if !checkCount {
 			if content.Address != ownWallet {
-				err = f.SetCellValue("Sheet1", fmt.Sprintf("L%d", sellCont), "address not match")
+				err = f.SetCellValue("Sheet1", fmt.Sprintf("M%d", sellCont), "address not match")
 				if err != nil {
 					sellCont = sellCont + 1
 					continue
 				}
+			}
+		}
+
+		if content.Coin == "DOGS" {
+			err = f.SetCellValue("Sheet1", fmt.Sprintf("K%d", sellCont), content.ContractAddress)
+			if err != nil {
+				sellCont = sellCont + 1
+				continue
 			}
 		}
 
@@ -192,5 +213,4 @@ func main() {
 	if err != nil {
 		fmt.Println("error to SAVE :", err.Error())
 	}
-
 }
