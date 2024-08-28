@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"github.com/tonkeeper/tonapi-go"
 	"github.com/xuri/excelize/v2"
 	"golang.org/x/net/html"
 	"io"
@@ -9,6 +11,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var Contract = "EQCvxJy4eG8hyHBFsZ7eePxrRsUQSFE_jpptRAYBmcG_DOGS"
@@ -17,6 +20,7 @@ var Contract = "EQCvxJy4eG8hyHBFsZ7eePxrRsUQSFE_jpptRAYBmcG_DOGS"
 func fetchHTML(url string) (string, error) {
 	resp, err := http.Get(url)
 	if err != nil {
+		fmt.Println("error is :", err.Error())
 		return "", err
 	}
 	defer resp.Body.Close()
@@ -132,7 +136,41 @@ func extractNumbers(input string) string {
 	return result
 }
 
+func getMineWalletAddress(address string, minAccountAddress string) string {
+	if address == minAccountAddress {
+		return "UQD5X3jciHiG4dA8fI3Y6oiXMkibk3RCJ0U2gFmeTsee2pXH"
+	}
+
+	return ""
+}
+
 func main() {
+	client, err := tonapi.New()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	jet := tonapi.GetAccountParams{
+		AccountID: "EQCvxJy4eG8hyHBFsZ7eePxrRsUQSFE_jpptRAYBmcG_DOGS",
+	}
+
+	jetton, err := client.GetAccount(context.Background(), jet)
+	if err != nil {
+		panic(err)
+	}
+
+	accParam := tonapi.GetAccountParams{
+		AccountID: "UQD5X3jciHiG4dA8fI3Y6oiXMkibk3RCJ0U2gFmeTsee2pXH",
+	}
+
+	account, err := client.GetAccount(context.Background(), accParam)
+	if err != nil {
+		panic(err)
+	}
+
+	mineAddress := account.GetAddress()
+	dogsAddr := jetton.GetAddress()
+
 	// Open the Excel file
 	f, err := excelize.OpenFile("NOT_TON.xlsx")
 	if err != nil {
@@ -144,26 +182,64 @@ func main() {
 	sellCont := 1
 	for !finishd {
 		fmt.Println("get count :", sellCont)
+
 		cellValue, err := f.GetCellValue("Sheet1", fmt.Sprintf("D%d", sellCont))
 		if err != nil {
 			sellCont = sellCont + 1
 			continue
 		}
+		Done, _ := f.GetCellValue("Sheet1", fmt.Sprintf("M%d", sellCont))
+		if Done == "DONE" {
+			sellCont = sellCont + 1
+			continue
+		}
+
+		time.Sleep(2 * time.Second)
+
 		if cellValue == "" {
 			sellCont = sellCont + 1
 			finishd = true
 			continue
 		}
 
-		url := fmt.Sprintf("https://tonviewer.com/transaction/%s", cellValue)
+		//url := fmt.Sprintf("https://tonviewer.com/transaction/%s", cellValue)
+		//
+		//htmlContent, err := fetchHTML(url)
+		//if err != nil {
+		//	sellCont = sellCont + 1
+		//	continue
+		//}
+		//content := parseHTML(htmlContent)
 
-		htmlContent, err := fetchHTML(url)
+		param := tonapi.GetJettonsEventsParams{
+			EventID: cellValue,
+		}
+
+		tr, err := client.GetJettonsEvents(context.Background(), param)
 		if err != nil {
+			fmt.Println("error to get tarnsaction : ", err.Error())
 			sellCont = sellCont + 1
+			finishd = true
 			continue
 		}
 
-		content := parseHTML(htmlContent)
+		content := new(Content)
+		actions := tr.GetActions()
+
+		if len(actions) > 0 {
+			privew := actions[0].GetSimplePreview()
+			transfer, ok := actions[0].GetJettonTransfer().Get()
+			if ok {
+				content.Payload = transfer.Comment.Value
+				content.Value = privew.Value.Value
+				content.Coin = transfer.Jetton.Name
+				if content.Coin == "Dogs" {
+					content.ContractAddress = dogsAddr == transfer.Jetton.Address
+				}
+				content.Address = getMineWalletAddress(transfer.Recipient.Value.GetAddress(), mineAddress)
+			}
+		}
+
 		err = f.SetCellValue("Sheet1", fmt.Sprintf("I%d", sellCont), content.Address)
 		if err != nil {
 			sellCont = sellCont + 1
@@ -198,19 +274,22 @@ func main() {
 			}
 		}
 
-		if content.Coin == "DOGS" {
+		if content.Coin == "Dogs" {
 			err = f.SetCellValue("Sheet1", fmt.Sprintf("K%d", sellCont), content.ContractAddress)
 			if err != nil {
 				sellCont = sellCont + 1
 				continue
 			}
 		}
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("M%d", sellCont), "DONE")
 
 		sellCont = sellCont + 1
+
 	}
 
 	err = f.Save()
 	if err != nil {
 		fmt.Println("error to SAVE :", err.Error())
 	}
+
 }
